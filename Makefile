@@ -2,7 +2,7 @@
 
 # Compiler settings
 CXX = g++
-CXXFLAGS = -std=c++2b -O3 -Wall -Wextra -pedantic
+CXXFLAGS = -std=c++2b -O3 -march=native -mtune=native -flto -funroll-loops -fomit-frame-pointer -Wall -Wextra -pedantic
 DEBUG_FLAGS = -g -O0 -DDEBUG
 
 # Target executable name
@@ -19,7 +19,7 @@ all: $(TARGET)
 
 # Build the executable
 $(TARGET): $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $@ $^
+	$(CXX) $(CXXFLAGS) -flto -o $@ $^
 
 # Compile source files to object files
 %.o: %.cpp
