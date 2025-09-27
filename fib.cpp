@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <string>
+#include <sstream>
 
 // Cache line size for optimal alignment (typical x86-64/ARM)
 #ifndef CACHE_LINE_SIZE
@@ -18,52 +19,98 @@
 // Force inline for critical performance paths
 #define FORCE_INLINE __attribute__((always_inline)) inline
 
+// Helper to convert unsigned __int128 to string
+std::string uint128_to_string(unsigned __int128 value) {
+    if (value == 0) return "0";
+
+    std::string result;
+    while (value > 0) {
+        result = char('0' + value % 10) + result;
+        value /= 10;
+    }
+    return result;
+}
+
+// Use unsigned __int128 for extended range
+using uint128_t = unsigned __int128;
+
 class alignas(CACHE_LINE_SIZE) Fibonacci {
 private:
-    // F(93) is the largest Fibonacci number that fits in a std::uint64_t (12200160415121876738).
-    static constexpr std::uint32_t MAX_N = 93;
+    // F(93) is the largest that fits in uint64_t, but we'll support up to F(186) with uint128_t
+    static constexpr std::uint32_t MAX_N_64 = 93;
+    static constexpr std::uint32_t MAX_N_128 = 186;  // F(186) is the largest that fits in unsigned __int128
 
 public:
-    static constexpr std::size_t TABLE_SIZE = MAX_N + 1;
+    static constexpr std::size_t TABLE_SIZE_64 = MAX_N_64 + 1;
+    static constexpr std::size_t TABLE_SIZE_128 = MAX_N_128 + 1;
 
 private:
-    // The compile-time generated lookup table, cache-aligned for optimal performance
-    alignas(CACHE_LINE_SIZE) static constexpr auto LookupTable = []() constexpr {
-        // The lambda is marked constexpr to ensure compile-time execution.
-        std::array<std::uint64_t, TABLE_SIZE> table = {};
+    // The compile-time generated lookup table for uint64_t values
+    alignas(CACHE_LINE_SIZE) static constexpr auto LookupTable64 = []() constexpr {
+        std::array<std::uint64_t, TABLE_SIZE_64> table = {};
 
-        // C++14 allows modification of local variables and loops within constexpr functions.
-        if (TABLE_SIZE > 0) table[0] = 0;
-        if (TABLE_SIZE > 1) table[1] = 1;
+        if (TABLE_SIZE_64 > 0) table[0] = 0;
+        if (TABLE_SIZE_64 > 1) table[1] = 1;
 
-        for (std::size_t i = 2; i < TABLE_SIZE; ++i) {
+        for (std::size_t i = 2; i < TABLE_SIZE_64; ++i) {
             table[i] = table[i - 1] + table[i - 2];
         }
         return table;
-    }(); // <-- The lambda is immediately invoked here.
+    }();
+
+    // The compile-time generated lookup table for uint128_t values
+    alignas(CACHE_LINE_SIZE) static constexpr auto LookupTable128 = []() constexpr {
+        std::array<uint128_t, TABLE_SIZE_128> table = {};
+
+        if (TABLE_SIZE_128 > 0) table[0] = 0;
+        if (TABLE_SIZE_128 > 1) table[1] = 1;
+
+        for (std::size_t i = 2; i < TABLE_SIZE_128; ++i) {
+            table[i] = table[i - 1] + table[i - 2];
+        }
+        return table;
+    }();
 
 public:
-    // The optimized lookup function: O(1) complexity with aggressive inlining
+    // Get Fibonacci number as uint64_t (for backwards compatibility)
     [[nodiscard]] FORCE_INLINE std::uint64_t operator()(std::uint32_t n) const noexcept {
-        // Bounds check for safety - return 0 for out of range values
-        if (UNLIKELY(n > MAX_N)) {
+        if (UNLIKELY(n > MAX_N_64)) {
             return 0;
         }
-
-        // Direct lookup - this compiles to a single MOV instruction
-        return LookupTable[n];
+        return LookupTable64[n];
     }
 
-    // Unsafe version for when you absolutely know n is valid
+    // Get Fibonacci number as uint128_t for extended range
+    [[nodiscard]] FORCE_INLINE uint128_t get128(std::uint32_t n) const noexcept {
+        if (UNLIKELY(n > MAX_N_128)) {
+            return 0;
+        }
+        return LookupTable128[n];
+    }
+
+    // Get Fibonacci number as string (handles full 128-bit range)
+    [[nodiscard]] std::string get_string(std::uint32_t n) const noexcept {
+        if (UNLIKELY(n > MAX_N_128)) {
+            return "0";
+        }
+        return uint128_to_string(LookupTable128[n]);
+    }
+
+    // Unsafe version for when you absolutely know n is valid (<=93)
     [[nodiscard]] FORCE_INLINE std::uint64_t unsafe_get(std::uint32_t n) const noexcept {
-        return LookupTable[n];
+        return LookupTable64[n];
+    }
+
+    // Unsafe version for 128-bit range
+    [[nodiscard]] FORCE_INLINE uint128_t unsafe_get128(std::uint32_t n) const noexcept {
+        return LookupTable128[n];
     }
 
     // Prefetch multiple values for better cache utilization
     FORCE_INLINE void prefetch_range(std::uint32_t start, std::uint32_t count) const noexcept {
-        const std::uint32_t end = std::min(start + count, static_cast<std::uint32_t>(TABLE_SIZE));
+        const std::uint32_t end = std::min(start + count, static_cast<std::uint32_t>(TABLE_SIZE_64));
         for (std::uint32_t i = start; i < end; i += 8) {
-            __builtin_prefetch(&LookupTable[i], 0, 3);
+            __builtin_prefetch(&LookupTable64[i], 0, 3);
         }
     }
 };
@@ -71,7 +118,8 @@ public:
 // For strict C++14 compatibility (before inline variables were introduced in C++17),
 // static constexpr members may require an out-of-class definition if they are ODR-used.
 // We use decltype to ensure the type matches the auto-deduced type inside the class.
-constexpr decltype(Fibonacci::LookupTable) Fibonacci::LookupTable;
+constexpr decltype(Fibonacci::LookupTable64) Fibonacci::LookupTable64;
+constexpr decltype(Fibonacci::LookupTable128) Fibonacci::LookupTable128;
 
 
 // High-resolution micro benchmarking
@@ -118,31 +166,42 @@ int main() {
 
     std::cout << std::string(75, '=') << std::endl;
 
-    // Test some random higher values (beyond uint64_t capacity)
-    std::cout << "\nTesting random higher values (beyond F(93)):" << std::endl;
+    // Test extended range with 128-bit support
+    std::cout << "\nTesting extended range with 128-bit support (F(94) to F(186)):" << std::endl;
     std::cout << std::string(75, '-') << std::endl;
 
-    std::uint32_t out_of_range_values[] = {94, 100, 150, 200, 500, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 4294967295U};
-    for (std::uint32_t n : out_of_range_values) {
+    std::uint32_t extended_values[] = {94, 100, 110, 120, 130, 140, 150, 160, 170, 180, 185, 186, 187, 200, 1000, 10000};
+    for (std::uint32_t n : extended_values) {
         const auto start = std::chrono::high_resolution_clock::now();
 
         constexpr int micro_iterations = 1000;
-        std::uint64_t local_sum = 0;
-        std::uint64_t single_value = (n <= 93) ? fib.unsafe_get(n) : fib(n);  // Use bounds-checked version
+        std::string value_str = fib.get_string(n);
+
+        // Just benchmark the lookup
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += single_value;
+            volatile auto temp = fib.get128(n);
+            (void)temp;
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
-        sink += local_sum;
 
         const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
-        std::cout << "F(" << std::setw(6) << n << ") = "
-                  << std::setw(20) << single_value
-                  << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
-                  << " | " << (single_value == 0 ? "OUT OF RANGE" : "VALID")
+        std::cout << "F(" << std::setw(4) << n << ") = ";
+        if (n <= 186) {
+            // Truncate very long numbers for display
+            if (value_str.length() > 40) {
+                std::cout << value_str.substr(0, 20) << "..."
+                         << value_str.substr(value_str.length() - 17);
+            } else {
+                std::cout << std::setw(40) << value_str;
+            }
+        } else {
+            std::cout << std::setw(40) << "0";
+        }
+        std::cout << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
+                  << " | " << (n <= 186 ? "VALID" : "OUT OF RANGE")
                   << std::endl;
     }
 
