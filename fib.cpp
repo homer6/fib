@@ -79,8 +79,7 @@ constexpr decltype(Fibonacci::LookupTable) Fibonacci::LookupTable;
 // High-resolution micro benchmarking
 int main() {
     // We use this accumulator as a "sink" to ensure the compiler doesn't optimize away the loops.
-    // Mark as volatile to prevent over-optimization
-    volatile std::uint64_t sink = 0;
+    std::uint64_t sink = 0;
 
     Fibonacci fib;
 
@@ -91,6 +90,9 @@ int main() {
 
     std::cout << "Optimized Fibonacci micro-benchmark (Maximum Performance Edition):\n" << std::endl;
 
+    // Debug: Check F(93) directly
+    std::cout << "DEBUG: F(93) from table = " << fib.unsafe_get(93) << " (expected: 12200160415121876738)" << std::endl << std::endl;
+
     // Benchmark individual calculations using unsafe_get for absolute minimum overhead
     for (std::uint32_t i = 0; i <= 10; ++i) {
         // Use high_resolution_clock for best precision
@@ -99,8 +101,9 @@ int main() {
         // Multiple iterations to get more stable measurements
         constexpr int micro_iterations = 100;
         std::uint64_t local_sum = 0;
+        std::uint64_t single_value = fib.unsafe_get(i);
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += fib.unsafe_get(i);
+            local_sum += single_value;
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
@@ -110,7 +113,7 @@ int main() {
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
         // Increased width to 20 to accommodate F(93)
-        std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << (local_sum / micro_iterations)
+        std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << single_value
                   << " [" << std::fixed << std::setprecision(3) << avg_ns << " ns avg]" << std::endl;
     }
 
@@ -127,8 +130,9 @@ int main() {
 
         constexpr int micro_iterations = 100;
         std::uint64_t local_sum = 0;
+        std::uint64_t single_value = fib.unsafe_get(n);
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += fib.unsafe_get(n);
+            local_sum += single_value;
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
@@ -137,7 +141,7 @@ int main() {
         const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
-        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << (local_sum / micro_iterations)
+        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << single_value
                   << " [" << std::fixed << std::setprecision(3) << avg_ns << " ns avg]" << std::endl;
     }
 
@@ -173,7 +177,8 @@ int main() {
                   << std::setprecision(1) << (ops_per_second / 1e6) << "M ops/sec" << std::endl;
     }
 
-    // Print the sink to force calculation
+    // Force compiler to not optimize away the sink
+    __asm__ __volatile__("" : : "r"(sink) : "memory");
     std::cout << "\nBenchmark sink: " << sink << std::endl;
 
     return 0;

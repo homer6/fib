@@ -24,6 +24,6 @@ The `Fibonacci` class (fib.cpp) employs an Immediately Invoked Lambda Expression
 
 ### Compilation Requirements
 
-- C++14 or later compiler required
+- C++23 compiler required (uses -std=c++2b)
 - Uses g++ by default (configured in Makefile)
 - Optimization level -O3 for release builds
