@@ -146,9 +146,11 @@ int main() {
         // Multiple iterations to get more stable measurements
         constexpr int micro_iterations = 1000;
         std::uint64_t local_sum = 0;
-        std::uint64_t single_value = fib.unsafe_get(i);
+
+        // Force actual lookups in the loop using volatile to prevent optimization
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += single_value;
+            volatile std::uint32_t index = i;  // Volatile prevents compiler from optimizing away the lookup
+            local_sum += fib.unsafe_get(index);
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
@@ -158,7 +160,7 @@ int main() {
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
         // Output with value and performance metrics
-        std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << single_value
+        std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << fib(i)
                   << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
                   << " | " << std::setprecision(1) << (avg_ns > 0 ? (1000.0 / avg_ns) : 1000000) << "M ops/sec"
                   << std::endl;
@@ -177,11 +179,13 @@ int main() {
         constexpr int micro_iterations = 1000;
         std::string value_str = fib.get_string(n);
 
-        // Just benchmark the lookup
+        // Force actual lookups using volatile index
+        uint128_t local_sum = 0;
         for (int j = 0; j < micro_iterations; ++j) {
-            volatile auto temp = fib.get128(n);
-            (void)temp;
+            volatile std::uint32_t index = n;  // Volatile prevents optimization
+            local_sum += fib.get128(index);
         }
+        sink += static_cast<std::uint64_t>(local_sum);  // Prevent dead code elimination
 
         const auto end = std::chrono::high_resolution_clock::now();
 
@@ -215,9 +219,11 @@ int main() {
 
         constexpr int micro_iterations = 1000;
         std::uint64_t local_sum = 0;
-        std::uint64_t single_value = fib.unsafe_get(n);
+
+        // Force actual lookups using volatile index
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += single_value;
+            volatile std::uint32_t index = n;  // Volatile prevents optimization
+            local_sum += fib.unsafe_get(index);
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
@@ -226,7 +232,7 @@ int main() {
         const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
-        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << single_value
+        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << fib(n)
                   << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
                   << " | " << std::setprecision(1) << (avg_ns > 0 ? (1000.0 / avg_ns) : 1000000) << "M ops/sec"
                   << std::endl;
@@ -247,9 +253,11 @@ int main() {
 
         constexpr int micro_iterations = 100;
         std::uint64_t local_sum = 0;
-        std::uint64_t single_value = fib.unsafe_get(n);
+
+        // Force actual lookups using volatile index
         for (int j = 0; j < micro_iterations; ++j) {
-            local_sum += single_value;
+            volatile std::uint32_t index = n;  // Volatile prevents optimization
+            local_sum += fib.unsafe_get(index);
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
@@ -258,7 +266,7 @@ int main() {
         const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
-        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << single_value
+        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << fib(n)
                   << " [" << std::fixed << std::setprecision(3) << avg_ns << " ns avg]" << std::endl;
     }
 
@@ -273,13 +281,17 @@ int main() {
 
         const auto start = std::chrono::high_resolution_clock::now();
 
-        // Unroll loop manually for better performance
+        // Unroll loop with volatile indices to force lookups
         std::uint64_t local_sink = 0;
         for (int i = 0; i < iterations; i += 4) {
-            local_sink += fib.unsafe_get(n);
-            local_sink += fib.unsafe_get(n);
-            local_sink += fib.unsafe_get(n);
-            local_sink += fib.unsafe_get(n);
+            volatile std::uint32_t idx = n;
+            local_sink += fib.unsafe_get(idx);
+            idx = n;  // Reset to prevent compiler cleverness
+            local_sink += fib.unsafe_get(idx);
+            idx = n;
+            local_sink += fib.unsafe_get(idx);
+            idx = n;
+            local_sink += fib.unsafe_get(idx);
         }
 
         const auto end = std::chrono::high_resolution_clock::now();
