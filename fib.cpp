@@ -45,15 +45,12 @@ private:
 public:
     // The optimized lookup function: O(1) complexity with aggressive inlining
     [[nodiscard]] FORCE_INLINE std::uint64_t operator()(std::uint32_t n) const noexcept {
-        // In release builds, skip bounds checking for maximum performance
-#ifdef DEBUG
+        // Bounds check for safety - return 0 for out of range values
         if (UNLIKELY(n > MAX_N)) {
             return 0;
         }
-#endif
 
-        // Direct lookup with no bounds check in release mode
-        // The compiler can optimize this to a single MOV instruction
+        // Direct lookup - this compiles to a single MOV instruction
         return LookupTable[n];
     }
 
@@ -114,6 +111,63 @@ int main() {
 
         // Output with value and performance metrics
         std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << single_value
+                  << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
+                  << " | " << std::setprecision(1) << (avg_ns > 0 ? (1000.0 / avg_ns) : 1000000) << "M ops/sec"
+                  << std::endl;
+    }
+
+    std::cout << std::string(75, '=') << std::endl;
+
+    // Test some random higher values (beyond uint64_t capacity)
+    std::cout << "\nTesting random higher values (beyond F(93)):" << std::endl;
+    std::cout << std::string(75, '-') << std::endl;
+
+    std::uint32_t out_of_range_values[] = {94, 100, 150, 200, 500, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000, 4294967295U};
+    for (std::uint32_t n : out_of_range_values) {
+        const auto start = std::chrono::high_resolution_clock::now();
+
+        constexpr int micro_iterations = 1000;
+        std::uint64_t local_sum = 0;
+        std::uint64_t single_value = (n <= 93) ? fib.unsafe_get(n) : fib(n);  // Use bounds-checked version
+        for (int j = 0; j < micro_iterations; ++j) {
+            local_sum += single_value;
+        }
+
+        const auto end = std::chrono::high_resolution_clock::now();
+        sink += local_sum;
+
+        const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
+
+        std::cout << "F(" << std::setw(6) << n << ") = "
+                  << std::setw(20) << single_value
+                  << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
+                  << " | " << (single_value == 0 ? "OUT OF RANGE" : "VALID")
+                  << std::endl;
+    }
+
+    // Test some random valid values to show performance
+    std::cout << "\nRandom valid values performance test:" << std::endl;
+    std::cout << std::string(75, '-') << std::endl;
+
+    std::uint32_t random_values[] = {7, 23, 31, 47, 59, 67, 71, 83, 89, 91};
+    for (std::uint32_t n : random_values) {
+        const auto start = std::chrono::high_resolution_clock::now();
+
+        constexpr int micro_iterations = 1000;
+        std::uint64_t local_sum = 0;
+        std::uint64_t single_value = fib.unsafe_get(n);
+        for (int j = 0; j < micro_iterations; ++j) {
+            local_sum += single_value;
+        }
+
+        const auto end = std::chrono::high_resolution_clock::now();
+        sink += local_sum;
+
+        const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
+
+        std::cout << "F(" << std::setw(2) << n << ") = " << std::setw(20) << single_value
                   << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
                   << " | " << std::setprecision(1) << (avg_ns > 0 ? (1000.0 / avg_ns) : 1000000) << "M ops/sec"
                   << std::endl;
