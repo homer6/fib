@@ -2,7 +2,7 @@
 
 # Compiler settings
 CXX = g++
-CXXFLAGS = -std=c++14 -O3 -Wall -Wextra -pedantic
+CXXFLAGS = -std=c++2b -O3 -Wall -Wextra -pedantic
 DEBUG_FLAGS = -g -O0 -DDEBUG
 
 # Target executable name
@@ -26,7 +26,7 @@ $(TARGET): $(OBJECTS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Debug build
-debug: CXXFLAGS = $(DEBUG_FLAGS) -std=c++14 -Wall -Wextra -pedantic
+debug: CXXFLAGS = $(DEBUG_FLAGS) -std=c++2b -Wall -Wextra -pedantic
 debug: clean $(TARGET)
 
 # Run the program
