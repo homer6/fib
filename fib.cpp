@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <cstdint>
 #include <algorithm>
+#include <string>
 
 // Cache line size for optimal alignment (typical x86-64/ARM)
 #ifndef CACHE_LINE_SIZE
@@ -89,17 +90,16 @@ int main() {
     }
 
     std::cout << "Optimized Fibonacci micro-benchmark (Maximum Performance Edition):\n" << std::endl;
+    std::cout << "Complete Fibonacci Sequence with Performance Metrics (F(0) to F(93)):\n" << std::endl;
+    std::cout << std::string(75, '=') << std::endl;
 
-    // Debug: Check F(93) directly
-    std::cout << "DEBUG: F(93) from table = " << fib.unsafe_get(93) << " (expected: 12200160415121876738)" << std::endl << std::endl;
-
-    // Benchmark individual calculations using unsafe_get for absolute minimum overhead
-    for (std::uint32_t i = 0; i <= 10; ++i) {
+    // Benchmark ALL values from F(0) to F(93)
+    for (std::uint32_t i = 0; i <= 93; ++i) {
         // Use high_resolution_clock for best precision
         const auto start = std::chrono::high_resolution_clock::now();
 
         // Multiple iterations to get more stable measurements
-        constexpr int micro_iterations = 100;
+        constexpr int micro_iterations = 1000;
         std::uint64_t local_sum = 0;
         std::uint64_t single_value = fib.unsafe_get(i);
         for (int j = 0; j < micro_iterations; ++j) {
@@ -112,13 +112,17 @@ int main() {
         const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         const double avg_ns = static_cast<double>(duration.count()) / micro_iterations;
 
-        // Increased width to 20 to accommodate F(93)
+        // Output with value and performance metrics
         std::cout << "F(" << std::setw(2) << i << ") = " << std::setw(20) << single_value
-                  << " [" << std::fixed << std::setprecision(3) << avg_ns << " ns avg]" << std::endl;
+                  << " | " << std::fixed << std::setprecision(4) << avg_ns << " ns"
+                  << " | " << std::setprecision(1) << (avg_ns > 0 ? (1000.0 / avg_ns) : 1000000) << "M ops/sec"
+                  << std::endl;
     }
 
-    // Benchmark larger values with prefetching
-    std::cout << "\nLarger values:" << std::endl;
+    std::cout << std::string(75, '=') << std::endl;
+
+    // Additional targeted benchmarks
+    std::cout << "\nTargeted benchmarks with prefetching:" << std::endl;
     // Explicit array definition for broad compatibility
     std::uint32_t large_values[] = {20, 40, 60, 80, 93};
 
