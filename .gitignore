@@ -1,0 +1,43 @@
+# Compiled Object files
+*.o
+*.obj
+
+# Executables
+fib
+*.exe
+*.out
+*.app
+
+# Debug files
+*.dSYM/
+*.pdb
+*.ilk
+*.idb
+
+# Build directories
+build/
+cmake-build-*/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Profiling and optimization data
+*.gcda
+*.gcno
+gmon.out
+perf.data
+perf.data.old
+callgrind.out.*
+
+# Temporary files
+*.tmp
+temp/
